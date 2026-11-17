@@ -52,3 +52,16 @@ class EvidenceAuditor:
             raise
         except (CaptureError, ValueError, TypeError, KeyError) as exc:
             raise IntegrityError('corrupt evidence: ' + str(exc)) from exc
+
+    def audit_derived(self, package_id):
+        """Independent account: re-read archived parents and copies and
+        recompute the fixed rewrite, its parent binding and both-side frame
+        provenance.  Self-reported digests are never trusted on their own."""
+        from acquisition.archive.derived import load_verified_package
+        try:
+            load_verified_package(self.store, package_id, deep=True)
+        except IntegrityError:
+            raise
+        except (CaptureError, ValueError, TypeError, KeyError) as exc:
+            raise IntegrityError('corrupt derived package: ' + str(exc)) from exc
+        return True

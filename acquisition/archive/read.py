@@ -51,3 +51,7 @@ class CaptureReader:
         if type(frame_index) is not int or not 0 <= frame_index < len(frames):
             raise NotFound((capture_id, frame_index))
         return frames[frame_index]
+
+    def read_derived(self, package_id):
+        from acquisition.archive.derived import read_derived
+        return read_derived(self.store, package_id)

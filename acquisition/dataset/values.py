@@ -2,6 +2,17 @@ import re
 import struct
 from acquisition.receipt.source import CaptureError
 
+UID_PATTERN = re.compile(r'[0-9]+(?:\.[0-9]+)*')
+
+
+def valid_uid(value):
+    """Apply the archive's UI syntax contract to a decoded string."""
+    if not isinstance(value, str) or not value or len(value) > 64:
+        return False
+    if UID_PATTERN.fullmatch(value) is None:
+        return False
+    return not any(len(part) > 1 and part[0] == '0' for part in value.split('.'))
+
 
 def decode_text(data, element, vr):
     if element.vr != vr:

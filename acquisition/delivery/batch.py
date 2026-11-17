@@ -44,3 +44,7 @@ class CaptureService:
             except CaptureError as exc:
                 result.append(BatchItemResult(source_id, error_type=type(exc).__name__, error=str(exc)))
         return tuple(result)
+
+    def derive(self, package_id, capture_ids, uid_map):
+        from acquisition.archive.derived import publish_derived
+        return publish_derived(self.store, package_id, capture_ids, uid_map)

@@ -45,13 +45,23 @@ with ArchiveStore("archive.sqlite") as archive:
     delivery = CaptureExporter(archive).export(receipt.capture_id, "new-delivery")
 ```
 
+研究副本沿用同一批入口，只增加方法、不改旧签名（见 DERIVED.md）：
+
+```python
+with ArchiveStore("archive.sqlite") as archive:
+    package = CaptureService(archive).derive("research-1", [parent_id_a, parent_id_b], uid_map)
+    fixed = CaptureReader(archive).read_derived("research-1")
+    assert EvidenceAuditor(archive).audit_derived("research-1") is True
+    manifest = CaptureExporter(archive).export_derived("research-1", "research-delivery")
+```
+
 source_id 是不透明非空字符串，精确保留大小写和空格。输入 bytes、bytearray、memoryview 在接收时复制为 bytes。回执 SourceReceipt 含 source_id、source_digest、attachment_id、capture_id、frame_count；同身份同字节返回原回执，异字节抛 SourceConflict，摘要之外还逐字比较。新身份即使同字节也有独立成果。顺序 ingest_batch 返回逐输入 BatchItemResult；业务失败不撤回此前成功项，I/O 异常传播。
 
 非法格式抛 CaptureError；读取不存在成果/帧抛 NotFound；损坏抛 IntegrityError。异常分别定义在 receipt/source.py、receipt/identity.py 和 archive/schema.py。read 清单为独立 JSON 对象，帧为 ArchivedFrame（index、body、digest、有序 SourceSpan 元组）；audit 返回 AuditFrameResult 元组。export 返回 DeliveryManifest，输出数值顺序的 frame-000000.jpg 等原字节和 manifest.json。
 
 receipt 固定身份；dataset 拥有元数据和像素入口；encapsulation 拥有项目坐标、载荷映射和原位置；frames 拥有语法边界、正文及来源组合；archive 拥有 SQLite 连接、固定清单及原子提交；delivery 组织批次、复核和交付。每包的四个模块均进入上述入口调用链。
 
-原附件 BLOB、清单、全部帧和来源、回执同事务提交；准备状态不对读者可见。失败不占用来源身份，旧成果不变。只追加成果，无修改已发布数据接口；重复初始化不清库，不兼容 schema 明确拒绝，不自动迁移。读取与复核检查附件、正文、来源和关联，不重新提取或自动修复损坏；后续导入不改变旧 capture_id。单工作者离线工作流，不提供并发导入保证。导出先复核，再同级暂存完整写出后改名，失败仅清理本次暂存并传播 I/O 异常；已有目标拒绝覆盖。
+原附件 BLOB、清单、全部帧和来源、回执同事务提交；准备状态不对读者可见。失败不占用来源身份，旧成果不变。只追加成果，无修改已发布数据接口；重复初始化不清库，不兼容 schema 明确拒绝，不自动迁移（仅有派生能力前建立的旧库会在打开时原子地补建两张派生表，原有数据行不变）。读取与复核检查附件、正文、来源和关联，不重新提取或自动修复损坏；后续导入不改变旧 capture_id。单工作者离线工作流，不提供并发导入保证。导出先复核，再同级暂存完整写出后改名，失败仅清理本次暂存并传播 I/O 异常；已有目标拒绝覆盖。
 
 ## 样例和回归
 
@@ -59,4 +69,6 @@ samples/normal_case.json 指定有限双帧样例；tests/fixtures.py 以显式 
 
 完整套件保留 v1—v8：test_intake 覆盖接收、多位帧数、单帧缺省、序列层级、精确身份和顺序批次；test_frames 覆盖空/非空偏移表、跨项目交集、尾填充、各偶数切点与非法格式整次拒绝；test_archive 覆盖各写入阶段和提交前失败、重开无残留、重试、重复初始化及 schema 拒绝；test_delivery 覆盖新进程禁止导入提取器时的读取与导出、12 帧数值顺序、固定旧成果、导出失败/目标冲突、原证据/正文/来源/关联损坏。正常断言后才输出 POINTWISE_SCENARIO JSON。
 
-受控故障注入为真实操作阶段回调：ArchiveStore(path, fault=callback) 在 source、capture、frame:N、receipt、before_commit 阶段调用；CaptureExporter(store, fault=callback) 在 frame:N、before_publish 阶段调用。回调抛出异常，生产事务/暂存清理照常执行，测试不替代解析器、数据库或文件写出。
+研究副本回归在 test_derived.py（改写不变量、重投/冲突、提交回滚、导出形状与回滚、五类损坏核账、旧库加表升级）与 derived_check.py 的 DerivedChecks 中；`run.py verify` 同时运行两者，`derived_check.py verify` 只跑联合核验。run.py demo 先走原 JPEG 链路，再在同一清单下采集两个父文件、派生、关闭重开、核账并导出，输出双侧帧来源。
+
+受控故障注入为真实操作阶段回调：ArchiveStore(path, fault=callback) 在 source、capture、frame:N、receipt、before_commit 阶段调用；派生发布另调用 derived_file:N、derived_manifest、before_commit。CaptureExporter(store, fault=callback) 在 frame:N、before_publish 阶段调用；export_derived 使用 file:dicom-NNNNNN.dcm、before_publish。回调抛出异常，生产事务/暂存清理照常执行，测试不替代解析器、数据库或文件写出。
