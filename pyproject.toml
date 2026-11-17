@@ -1,0 +1,6 @@
+[project]
+name = "offline-image-acquisition"
+version = "1.0.0"
+description = "Offline DICOM JPEG acquisition with fixed source evidence"
+requires-python = ">=3.11"
+dependencies = []
